@@ -19,6 +19,7 @@ export default function App() {
   const [currentDataset, setCurrentDataset] = useState(null);
   const [pearson, setPearson] = useState(null);
   const [chartKey, setChartKey] = useState(0);
+  const [dataReady, setDataReady] = useState(false);
   const chartRef = useRef(null);
 
   const getCompanyName = useCallback((ticker) => {
@@ -29,6 +30,7 @@ export default function App() {
   const runComparison = useCallback(async (ticker) => {
     setAppState('loading');
     setPearson(null);
+    setDataReady(false);
 
     const days = periodToDays(FIXED_PERIOD);
     const prices = await fetchStockData(ticker, days);
@@ -60,6 +62,9 @@ export default function App() {
     setComparisonData(prices.map((p, i) => ({ date: p.date, value: best.aligned[i] ?? 0 })));
     setPearson(best.r);
     setChartKey((k) => k + 1);
+
+    // Signal to loading screen that data is ready
+    setDataReady(true);
   }, []);
 
   const handleCompanyChange = useCallback((ticker) => {
@@ -94,6 +99,7 @@ export default function App() {
         <FauxLoadingScreen
           onComplete={handleLoadingComplete}
           companyName={getCompanyName(selectedTicker)}
+          dataReady={dataReady}
         />
       )}
 
