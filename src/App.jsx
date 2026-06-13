@@ -26,12 +26,7 @@ export default function App() {
     return company ? company.name : ticker;
   }, []);
 
-  const pickRandomDataset = useCallback((excludeId) => {
-    const filtered = absurdDatasets.filter((d) => d.id !== excludeId);
-    return filtered[Math.floor(Math.random() * filtered.length)];
-  }, []);
-
-  const runComparison = useCallback(async (ticker, datasetOverride) => {
+  const runComparison = useCallback(async (ticker) => {
     setAppState('loading');
     setPearson(null);
 
@@ -39,32 +34,33 @@ export default function App() {
     const prices = await fetchStockData(ticker, days);
     setStockData(prices);
 
-    const dataset = datasetOverride || pickRandomDataset(null);
-    setCurrentDataset(dataset);
-
     const startDate = prices[0]?.date || new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     const endDate = prices[prices.length - 1]?.date || new Date().toISOString().slice(0, 10);
 
-    let datasetPoints = [];
-    try {
-      datasetPoints = await dataset.fetchFn(startDate, endDate);
-    } catch (e) {
-      console.warn('Dataset fetch failed:', e);
-    }
-
-    const aligned = alignDataset(prices, datasetPoints);
-    const filled = interpolateNulls(aligned);
-
-    const comparison = prices.map((p, i) => ({ date: p.date, value: filled[i] ?? 0 }));
-    setComparisonData(comparison);
-
     const stockValues = normalise(prices.map((p) => p.price));
-    const compValues = normalise(filled.map((v) => v ?? 0));
-    const r = pearsonCorrelation(stockValues, compValues);
-    setPearson(r);
 
+    const results = await Promise.allSettled(
+      absurdDatasets.map(async (dataset) => {
+        const points = await dataset.fetchFn(startDate, endDate);
+        const aligned = interpolateNulls(alignDataset(prices, points));
+        const compValues = normalise(aligned.map((v) => v ?? 0));
+        const r = pearsonCorrelation(stockValues, compValues);
+        return { dataset, aligned, r };
+      })
+    );
+
+    const valid = results
+      .filter((r) => r.status === 'fulfilled' && r.value.aligned.some((v) => v !== null))
+      .map((r) => r.value)
+      .sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+
+    const best = valid[0];
+
+    setCurrentDataset(best.dataset);
+    setComparisonData(prices.map((p, i) => ({ date: p.date, value: best.aligned[i] ?? 0 })));
+    setPearson(best.r);
     setChartKey((k) => k + 1);
-  }, [pickRandomDataset]);
+  }, []);
 
   const handleCompanyChange = useCallback((ticker) => {
     setSelectedTicker(ticker);
@@ -74,11 +70,6 @@ export default function App() {
   const handleLoadingComplete = useCallback(() => {
     setAppState('reveal');
   }, []);
-
-  const handleRandomize = useCallback(() => {
-    const newDataset = pickRandomDataset(currentDataset?.id);
-    runComparison(selectedTicker, newDataset);
-  }, [selectedTicker, currentDataset, pickRandomDataset, runComparison]);
 
   return (
     <div className="app">
@@ -138,7 +129,6 @@ export default function App() {
           />
 
           <ActionButtons
-            onRandomize={handleRandomize}
             chartRef={chartRef}
           />
         </div>
