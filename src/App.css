@@ -182,3 +182,31 @@
     border-right-color: var(--border);
   }
 }
+
+.pearson-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 24px;
+  margin: 16px auto;
+  max-width: 480px;
+  text-align: center;
+}
+
+.pearson-score {
+  font-size: 1rem;
+  color: var(--text-secondary, #aaa);
+  letter-spacing: 0.02em;
+}
+
+.pearson-score strong {
+  color: var(--accent, #00ff88);
+  font-size: 1.3rem;
+}
+
+.pearson-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  font-style: italic;
+}
