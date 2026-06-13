@@ -4,7 +4,7 @@
 // https://fred.stlouisfed.org/docs/api/api_key.html and replace FRED_API_KEY below).
 
 // ── Config ────────────────────────────────────────────────────
-const FRED_API_KEY = '2bdf9300e0a55d74b5c0b1009c602326'; // replace with your free key
+const FRED_API_KEY = import.meta.env.VITE_FRED_KEY || ''; // replace with your free key
 
 const absurdDatasets = [
 
