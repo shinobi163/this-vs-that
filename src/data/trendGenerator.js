@@ -26,10 +26,14 @@ export function pearsonLabel(r) {
 }
 
 export function normalise(values) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  // Use % change from first value so small-range series like M2
+  // aren't flattened when compared against volatile daily stock prices
+  const base = values[0] || 1;
+  const pctChanges = values.map((v) => (v - base) / Math.abs(base));
+  const min = Math.min(...pctChanges);
+  const max = Math.max(...pctChanges);
   const range = max - min || 1;
-  return values.map((v) => (v - min) / range);
+  return pctChanges.map((v) => (v - min) / range);
 }
 
 // Aligns real fetched dataset to stock date points by nearest month
