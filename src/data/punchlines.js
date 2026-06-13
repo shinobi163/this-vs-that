@@ -78,12 +78,6 @@ function classifyDirection(prices) {
   return 'wild ride';
 }
 
-// ── Correlation faker ─────────────────────────────────────────
-function fakeCorrelation() {
-  // Always hilariously high
-  const base = 0.85 + Math.random() * 0.14; // 0.85 – 0.99
-  return base.toFixed(2);
-}
 
 // ── Public API ────────────────────────────────────────────────
 
@@ -95,10 +89,10 @@ function fakeCorrelation() {
  * @param {number[]} [priceValues]  raw price array used to auto-detect direction
  * @returns {string} A fully-rendered punchline string.
  */
-export function generatePunchline(stockName, datasetName, priceValues = []) {
+export function generatePunchline(stockName, datasetName, priceValues = [], realCorrelation = null) {
   const direction   = classifyDirection(priceValues);
-  const correlation = fakeCorrelation();
-
+  const correlation = realCorrelation !== null ? realCorrelation : '0.99';
+  
   const pick = punchlines[Math.floor(Math.random() * punchlines.length)];
 
   return pick.template
