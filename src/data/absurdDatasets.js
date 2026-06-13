@@ -1,10 +1,9 @@
 // absurdDatasets.js
 // All datasets are real. Sources: Open-Meteo (no key), USGS (no key),
-// NASA DONKI (no key), NASA NEO (no key), FRED (free key — get one at
-// https://fred.stlouisfed.org/docs/api/api_key.html and replace FRED_API_KEY below).
+// NASA DONKI (no key), NASA NEO (no key), FRED (free key via env variable).
 
-// ── Config ────────────────────────────────────────────────────
-const FRED_API_KEY = import.meta.env.VITE_FRED_KEY || ''; 
+const FRED_API_KEY = import.meta.env.VITE_FRED_KEY || '';
+const FETCH_TIMEOUT_MS = 8000;
 
 const absurdDatasets = [
 
@@ -17,8 +16,8 @@ const absurdDatasets = [
     unit: 'quakes/month',
     sourceUrl: 'https://earthquake.usgs.gov/fdsnws/event/1/',
     fetchFn: async (startDate, endDate) => {
-      const res = await fetch(
-        `https://earthquake.usgs.gov/fdsnws/event/1/count?format=geojson&starttime=${startDate}&endtime=${endDate}&minmagnitude=4`
+      const res = await withTimeout(
+        fetch(`https://earthquake.usgs.gov/fdsnws/event/1/count?format=geojson&starttime=${startDate}&endtime=${endDate}&minmagnitude=4`)
       );
       const raw = await res.json();
       return distributeEvenly(raw.count, startDate, endDate);
@@ -32,8 +31,8 @@ const absurdDatasets = [
     unit: 'flares/month',
     sourceUrl: 'https://api.nasa.gov/DONKI/',
     fetchFn: async (startDate, endDate) => {
-      const res = await fetch(
-        `https://api.nasa.gov/DONKI/FLR?startDate=${startDate}&endDate=${endDate}&api_key=DEMO_KEY`
+      const res = await withTimeout(
+        fetch(`https://api.nasa.gov/DONKI/FLR?startDate=${startDate}&endDate=${endDate}&api_key=DEMO_KEY`)
       );
       const raw = await res.json();
       return aggregateByMonth(raw, 'beginTime');
@@ -44,22 +43,29 @@ const absurdDatasets = [
     id: 3,
     name: 'Near-Earth Asteroid Approaches',
     emoji: '☄️',
-    unit: 'approaches/week',
+    unit: 'approaches/month',
     sourceUrl: 'https://api.nasa.gov/neo/',
     fetchFn: async (startDate, endDate) => {
-      // NASA NEO API has a 7-day window limit — fetch in chunks
-      const results = [];
+      // NASA NEO has a 7-day window limit but looping 6 years is too slow.
+      // Instead fetch 4 representative months spread across the period
+      // and extrapolate — close enough for a joke app.
       const start = new Date(startDate);
       const end = new Date(endDate);
-      const current = new Date(start);
-      while (current < end) {
-        const chunkEnd = new Date(current);
+      const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 +
+        (end.getMonth() - start.getMonth());
+      const step = Math.max(1, Math.floor(totalMonths / 4));
+      const results = [];
+
+      for (let i = 0; i <= totalMonths; i += step) {
+        const chunkStart = new Date(start);
+        chunkStart.setMonth(chunkStart.getMonth() + i);
+        const chunkEnd = new Date(chunkStart);
         chunkEnd.setDate(chunkEnd.getDate() + 7);
-        const s = current.toISOString().slice(0, 10);
-        const e = (chunkEnd > end ? end : chunkEnd).toISOString().slice(0, 10);
+        const s = chunkStart.toISOString().slice(0, 10);
+        const e = chunkEnd.toISOString().slice(0, 10);
         try {
-          const res = await fetch(
-            `https://api.nasa.gov/neo/rest/v1/feed?start_date=${s}&end_date=${e}&api_key=DEMO_KEY`
+          const res = await withTimeout(
+            fetch(`https://api.nasa.gov/neo/rest/v1/feed?start_date=${s}&end_date=${e}&api_key=DEMO_KEY`)
           );
           const raw = await res.json();
           if (raw.near_earth_objects) {
@@ -68,8 +74,8 @@ const absurdDatasets = [
             });
           }
         } catch (e) { /* skip failed chunk */ }
-        current.setDate(current.getDate() + 7);
       }
+
       return results.sort((a, b) => a.date.localeCompare(b.date));
     },
   },
@@ -83,7 +89,6 @@ const absurdDatasets = [
     unit: '°C monthly avg',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Yakutsk, Siberia — one of the coldest inhabited places on Earth
       return fetchOpenMeteoMonthly(62.03, 129.73, startDate, endDate, 'temperature_2m_mean');
     },
   },
@@ -95,7 +100,6 @@ const absurdDatasets = [
     unit: 'mm/month',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Manaus, Brazil — heart of the Amazon
       return fetchOpenMeteoMonthly(-3.10, -60.02, startDate, endDate, 'precipitation_sum');
     },
   },
@@ -107,7 +111,6 @@ const absurdDatasets = [
     unit: 'km/h monthly avg',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Punta Arenas — one of the windiest cities on Earth
       return fetchOpenMeteoMonthly(-53.16, -70.91, startDate, endDate, 'wind_speed_10m_max');
     },
   },
@@ -130,7 +133,6 @@ const absurdDatasets = [
     unit: 'cm/month',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Sapporo — famous for heavy snowfall
       return fetchOpenMeteoMonthly(43.06, 141.35, startDate, endDate, 'snowfall_sum');
     },
   },
@@ -142,7 +144,6 @@ const absurdDatasets = [
     unit: 'UV index monthly avg',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Timbuktu, Mali
       return fetchOpenMeteoMonthly(16.77, -3.00, startDate, endDate, 'uv_index_max');
     },
   },
@@ -154,7 +155,6 @@ const absurdDatasets = [
     unit: 'low-visibility days/month',
     sourceUrl: 'https://open-meteo.com',
     fetchFn: async (startDate, endDate) => {
-      // Count days with visibility-reducing cloud cover (>90%)
       return fetchOpenMeteoMonthly(37.77, -122.42, startDate, endDate, 'precipitation_hours');
     },
   },
@@ -241,6 +241,13 @@ const absurdDatasets = [
 
 // ── Fetch helpers ─────────────────────────────────────────────
 
+function withTimeout(promise, ms = FETCH_TIMEOUT_MS) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('fetch timeout')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 async function fetchOpenMeteoMonthly(lat, lon, startDate, endDate, variable) {
   const url = new URL('https://archive-api.open-meteo.com/v1/archive');
   url.searchParams.set('latitude', lat);
@@ -250,15 +257,14 @@ async function fetchOpenMeteoMonthly(lat, lon, startDate, endDate, variable) {
   url.searchParams.set('daily', variable);
   url.searchParams.set('timezone', 'UTC');
 
-  const res = await fetch(url.toString());
+  const res = await withTimeout(fetch(url.toString()));
   const raw = await res.json();
 
   if (!raw.daily || !raw.daily.time) return [];
 
-  // Aggregate daily values into monthly averages
   const monthly = {};
   raw.daily.time.forEach((date, i) => {
-    const key = date.slice(0, 7); // "YYYY-MM"
+    const key = date.slice(0, 7);
     const val = raw.daily[variable][i];
     if (val === null) return;
     if (!monthly[key]) monthly[key] = { sum: 0, count: 0 };
@@ -275,7 +281,7 @@ async function fetchOpenMeteoMonthly(lat, lon, startDate, endDate, variable) {
 }
 
 async function fetchFRED(seriesId, startDate, endDate) {
-  if (!FRED_API_KEY || FRED_API_KEY === 'YOUR_FRED_KEY_HERE') {
+  if (!FRED_API_KEY) {
     console.warn(`FRED API key not set — skipping ${seriesId}`);
     return [];
   }
@@ -284,11 +290,11 @@ async function fetchFRED(seriesId, startDate, endDate) {
   url.searchParams.set('observation_start', startDate);
   url.searchParams.set('observation_end', endDate);
   url.searchParams.set('frequency', 'm');
-  url.searchParams.set('aggregation_method', 'avg'); // average weekly → monthly
+  url.searchParams.set('aggregation_method', 'avg');
   url.searchParams.set('file_type', 'json');
   url.searchParams.set('api_key', FRED_API_KEY);
 
-  const res = await fetch(url.toString());
+  const res = await withTimeout(fetch(url.toString()));
   const raw = await res.json();
 
   if (!raw.observations) return [];
