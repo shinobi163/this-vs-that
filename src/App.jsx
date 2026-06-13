@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
 import CompanyDropdown from './components/CompanyDropdown';
-//import TimePeriodDropdown from './components/TimePeriodDropdown';
 import FauxLoadingScreen from './components/FauxLoadingScreen';
 import ComparisonChart from './components/ComparisonChart';
 import PunchlineCard from './components/PunchlineCard';
@@ -10,9 +9,10 @@ import { alignDataset, interpolateNulls, normalise, pearsonCorrelation, pearsonL
 import absurdDatasets from './data/absurdDatasets';
 import companies from './data/companies';
 
+const FIXED_PERIOD = '6Y';
+
 export default function App() {
   const [selectedTicker, setSelectedTicker] = useState('');
-  //const [selectedPeriod, setSelectedPeriod] = useState('');
   const [appState, setAppState] = useState('idle');
   const [stockData, setStockData] = useState([]);
   const [comparisonData, setComparisonData] = useState([]);
@@ -31,38 +31,33 @@ export default function App() {
     return filtered[Math.floor(Math.random() * filtered.length)];
   }, []);
 
-  const runComparison = useCallback(async (ticker, period, datasetOverride) => {
+  const runComparison = useCallback(async (ticker, datasetOverride) => {
     setAppState('loading');
     setPearson(null);
 
-    const days = periodToDays(period);
+    const days = periodToDays(FIXED_PERIOD);
     const prices = await fetchStockData(ticker, days);
     setStockData(prices);
 
     const dataset = datasetOverride || pickRandomDataset(null);
     setCurrentDataset(dataset);
 
-    // Get start/end dates from stock data for the fetch
     const startDate = prices[0]?.date || new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     const endDate = prices[prices.length - 1]?.date || new Date().toISOString().slice(0, 10);
 
-    // Fetch real dataset
     let datasetPoints = [];
     try {
       datasetPoints = await dataset.fetchFn(startDate, endDate);
     } catch (e) {
-      console.warn('Dataset fetch failed, using empty:', e);
+      console.warn('Dataset fetch failed:', e);
     }
 
-    // Align real data to stock dates, interpolate gaps
     const aligned = alignDataset(prices, datasetPoints);
     const filled = interpolateNulls(aligned);
 
-    // Build comparison data in same shape the chart expects
     const comparison = prices.map((p, i) => ({ date: p.date, value: filled[i] ?? 0 }));
     setComparisonData(comparison);
 
-    // Calculate Pearson correlation
     const stockValues = normalise(prices.map((p) => p.price));
     const compValues = normalise(filled.map((v) => v ?? 0));
     const r = pearsonCorrelation(stockValues, compValues);
@@ -72,11 +67,10 @@ export default function App() {
   }, [pickRandomDataset]);
 
   const handleCompanyChange = useCallback((ticker) => {
-  setSelectedTicker(ticker);
-  if (ticker) runComparison(ticker, '6Y');
-}, [runComparison]);
+    setSelectedTicker(ticker);
+    if (ticker) runComparison(ticker);
+  }, [runComparison]);
 
-  
   const handleLoadingComplete = useCallback(() => {
     setAppState('reveal');
   }, []);
