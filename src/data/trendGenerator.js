@@ -34,11 +34,33 @@ export function normalise(values) {
 
 // Aligns real fetched dataset to stock date points by nearest month
 export function alignDataset(stockPrices, datasetPoints) {
-  if (!datasetPoints || datasetPoints.length === 0) return stockPrices.map(() => null);
+  if (!datasetPoints || datasetPoints.length === 0) {
+    return stockPrices.map(() => null);
+  }
+
   return stockPrices.map(({ date }) => {
-    const stockMonth = date.slice(0, 7);
-    const match = datasetPoints.find((d) => d.date.slice(0, 7) === stockMonth);
-    return match ? match.value : null;
+    const stockTime = new Date(date).getTime();
+
+    // Find the two nearest dataset points and interpolate between them
+    let before = null;
+    let after = null;
+
+    for (const point of datasetPoints) {
+      const t = new Date(point.date).getTime();
+      if (t <= stockTime) before = point;
+      if (t >= stockTime && !after) after = point;
+    }
+
+    if (before && after && before.date !== after.date) {
+      const t0 = new Date(before.date).getTime();
+      const t1 = new Date(after.date).getTime();
+      const ratio = (stockTime - t0) / (t1 - t0);
+      return parseFloat((before.value + ratio * (after.value - before.value)).toFixed(2));
+    }
+
+    if (before) return before.value;
+    if (after) return after.value;
+    return null;
   });
 }
 
