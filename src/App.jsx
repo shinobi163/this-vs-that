@@ -6,92 +6,85 @@ import ComparisonChart from './components/ComparisonChart';
 import PunchlineCard from './components/PunchlineCard';
 import ActionButtons from './components/ActionButtons';
 import { fetchStockData, periodToDays } from './api/stockApi';
-import { generateAbsurdTrend } from './data/trendGenerator';
+import { alignDataset, interpolateNulls, normalise, pearsonCorrelation, pearsonLabel } from './data/trendGenerator';
 import absurdDatasets from './data/absurdDatasets';
 import companies from './data/companies';
 
-/**
- * App states:
- *  - idle: waiting for user to pick both dropdowns
- *  - loading: faux loading screen with funny messages
- *  - reveal: chart + punchline + action buttons
- */
 export default function App() {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
-  const [appState, setAppState] = useState('idle'); // 'idle' | 'loading' | 'reveal'
+  const [appState, setAppState] = useState('idle');
   const [stockData, setStockData] = useState([]);
   const [comparisonData, setComparisonData] = useState([]);
   const [currentDataset, setCurrentDataset] = useState(null);
-  const [chartKey, setChartKey] = useState(0); // force re-mount for animation replay
+  const [pearson, setPearson] = useState(null);
+  const [chartKey, setChartKey] = useState(0);
   const chartRef = useRef(null);
 
-  // Get company name from ticker
   const getCompanyName = useCallback((ticker) => {
     const company = companies.find((c) => c.ticker === ticker);
     return company ? company.name : ticker;
   }, []);
 
-  // Pick a random absurd dataset (different from current)
-  const pickRandomDataset = useCallback(
-    (excludeId) => {
-      const filtered = absurdDatasets.filter((d) => d.id !== excludeId);
-      return filtered[Math.floor(Math.random() * filtered.length)];
-    },
-    []
-  );
+  const pickRandomDataset = useCallback((excludeId) => {
+    const filtered = absurdDatasets.filter((d) => d.id !== excludeId);
+    return filtered[Math.floor(Math.random() * filtered.length)];
+  }, []);
 
-  // Core: fetch stock data and generate comparison
-  const runComparison = useCallback(
-    async (ticker, period, datasetOverride) => {
-      setAppState('loading');
+  const runComparison = useCallback(async (ticker, period, datasetOverride) => {
+    setAppState('loading');
+    setPearson(null);
 
-      // Fetch stock data while loading screen plays
-      const days = periodToDays(period);
-      const prices = await fetchStockData(ticker, days);
-      setStockData(prices);
+    const days = periodToDays(period);
+    const prices = await fetchStockData(ticker, days);
+    setStockData(prices);
 
-      // Pick absurd dataset
-      const dataset = datasetOverride || pickRandomDataset(null);
-      setCurrentDataset(dataset);
+    const dataset = datasetOverride || pickRandomDataset(null);
+    setCurrentDataset(dataset);
 
-      // Generate matching trend
-      const fakeTrend = generateAbsurdTrend(prices, dataset);
-      setComparisonData(fakeTrend);
+    // Get start/end dates from stock data for the fetch
+    const startDate = prices[0]?.date || new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const endDate = prices[prices.length - 1]?.date || new Date().toISOString().slice(0, 10);
 
-      // Force chart re-mount for animation
-      setChartKey((k) => k + 1);
-    },
-    [pickRandomDataset]
-  );
+    // Fetch real dataset
+    let datasetPoints = [];
+    try {
+      datasetPoints = await dataset.fetchFn(startDate, endDate);
+    } catch (e) {
+      console.warn('Dataset fetch failed, using empty:', e);
+    }
 
-  // Handle dropdown changes
-  const handleCompanyChange = useCallback(
-    (ticker) => {
-      setSelectedTicker(ticker);
-      if (ticker && selectedPeriod) {
-        runComparison(ticker, selectedPeriod);
-      }
-    },
-    [selectedPeriod, runComparison]
-  );
+    // Align real data to stock dates, interpolate gaps
+    const aligned = alignDataset(prices, datasetPoints);
+    const filled = interpolateNulls(aligned);
 
-  const handlePeriodChange = useCallback(
-    (period) => {
-      setSelectedPeriod(period);
-      if (selectedTicker && period) {
-        runComparison(selectedTicker, period);
-      }
-    },
-    [selectedTicker, runComparison]
-  );
+    // Build comparison data in same shape the chart expects
+    const comparison = prices.map((p, i) => ({ date: p.date, value: filled[i] ?? 0 }));
+    setComparisonData(comparison);
 
-  // Loading complete → reveal
+    // Calculate Pearson correlation
+    const stockValues = normalise(prices.map((p) => p.price));
+    const compValues = normalise(filled.map((v) => v ?? 0));
+    const r = pearsonCorrelation(stockValues, compValues);
+    setPearson(r);
+
+    setChartKey((k) => k + 1);
+  }, [pickRandomDataset]);
+
+  const handleCompanyChange = useCallback((ticker) => {
+    setSelectedTicker(ticker);
+    if (ticker && selectedPeriod) runComparison(ticker, selectedPeriod);
+  }, [selectedPeriod, runComparison]);
+
+  const handlePeriodChange = useCallback((period) => {
+    setSelectedPeriod(period);
+    if (selectedTicker && period) runComparison(selectedTicker, period);
+  }, [selectedTicker, runComparison]);
+
   const handleLoadingComplete = useCallback(() => {
     setAppState('reveal');
   }, []);
 
-  // Randomize: pick new dataset, re-run loading → reveal
   const handleRandomize = useCallback(() => {
     const newDataset = pickRandomDataset(currentDataset?.id);
     runComparison(selectedTicker, selectedPeriod, newDataset);
@@ -99,7 +92,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="app-header">
         <h1 className="app-title">
           This <span className="vs">vs.</span> That
@@ -109,7 +101,6 @@ export default function App() {
         </p>
       </header>
 
-      {/* Selectors */}
       <div className="selectors">
         <CompanyDropdown
           value={selectedTicker}
@@ -123,7 +114,6 @@ export default function App() {
         />
       </div>
 
-      {/* Loading Screen */}
       {appState === 'loading' && (
         <FauxLoadingScreen
           onComplete={handleLoadingComplete}
@@ -131,7 +121,6 @@ export default function App() {
         />
       )}
 
-      {/* Reveal: Chart + Punchline + Actions */}
       {appState === 'reveal' && stockData.length > 0 && currentDataset && (
         <div className="chart-section" ref={chartRef}>
           <ComparisonChart
@@ -145,6 +134,15 @@ export default function App() {
             comparisonUnit={currentDataset.unit}
             comparisonSourceUrl={currentDataset.sourceUrl}
           />
+
+          {pearson !== null && (
+            <div className="pearson-card glass-card">
+              <span className="pearson-score">
+                Correlation: <strong>{pearson}</strong>
+              </span>
+              <span className="pearson-label">{pearsonLabel(pearson)}</span>
+            </div>
+          )}
 
           <PunchlineCard
             stockName={getCompanyName(selectedTicker)}
@@ -160,11 +158,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Footer */}
       <footer className="app-footer">
-        <p>
-          Correlation ≠ Causation. But also... 🤔
-        </p>
+        <p>Correlation ≠ Causation. But also... 🤔</p>
       </footer>
     </div>
   );
