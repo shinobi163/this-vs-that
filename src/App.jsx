@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import CompanyDropdown from './components/CompanyDropdown';
-import TimePeriodDropdown from './components/TimePeriodDropdown';
+//import TimePeriodDropdown from './components/TimePeriodDropdown';
 import FauxLoadingScreen from './components/FauxLoadingScreen';
 import ComparisonChart from './components/ComparisonChart';
 import PunchlineCard from './components/PunchlineCard';
@@ -105,11 +105,6 @@ export default function App() {
         <CompanyDropdown
           value={selectedTicker}
           onChange={handleCompanyChange}
-          disabled={appState === 'loading'}
-        />
-        <TimePeriodDropdown
-          value={selectedPeriod}
-          onChange={handlePeriodChange}
           disabled={appState === 'loading'}
         />
       </div>
