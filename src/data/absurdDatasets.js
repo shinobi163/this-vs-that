@@ -4,7 +4,7 @@
 // https://fred.stlouisfed.org/docs/api/api_key.html and replace FRED_API_KEY below).
 
 // ── Config ────────────────────────────────────────────────────
-const FRED_API_KEY = import.meta.env.VITE_FRED_KEY || ''; // removed hardcoded key
+const FRED_API_KEY = import.meta.env.VITE_FRED_KEY || ''; 
 
 const absurdDatasets = [
 
