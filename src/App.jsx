@@ -12,7 +12,7 @@ import companies from './data/companies';
 
 export default function App() {
   const [selectedTicker, setSelectedTicker] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  //const [selectedPeriod, setSelectedPeriod] = useState('');
   const [appState, setAppState] = useState('idle');
   const [stockData, setStockData] = useState([]);
   const [comparisonData, setComparisonData] = useState([]);
@@ -72,23 +72,19 @@ export default function App() {
   }, [pickRandomDataset]);
 
   const handleCompanyChange = useCallback((ticker) => {
-    setSelectedTicker(ticker);
-    if (ticker && selectedPeriod) runComparison(ticker, selectedPeriod);
-  }, [selectedPeriod, runComparison]);
+  setSelectedTicker(ticker);
+  if (ticker) runComparison(ticker, '6Y');
+}, [runComparison]);
 
-  const handlePeriodChange = useCallback((period) => {
-    setSelectedPeriod(period);
-    if (selectedTicker && period) runComparison(selectedTicker, period);
-  }, [selectedTicker, runComparison]);
-
+  
   const handleLoadingComplete = useCallback(() => {
     setAppState('reveal');
   }, []);
 
   const handleRandomize = useCallback(() => {
     const newDataset = pickRandomDataset(currentDataset?.id);
-    runComparison(selectedTicker, selectedPeriod, newDataset);
-  }, [selectedTicker, selectedPeriod, currentDataset, pickRandomDataset, runComparison]);
+    runComparison(selectedTicker, newDataset);
+  }, [selectedTicker, currentDataset, pickRandomDataset, runComparison]);
 
   return (
     <div className="app">
