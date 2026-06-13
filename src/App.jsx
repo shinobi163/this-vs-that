@@ -149,6 +149,7 @@ export default function App() {
             datasetName={currentDataset.name}
             datasetEmoji={currentDataset.emoji}
             stockData={stockData}
+            pearson={pearson}
           />
 
           <ActionButtons
