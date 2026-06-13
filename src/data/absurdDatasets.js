@@ -284,6 +284,7 @@ async function fetchFRED(seriesId, startDate, endDate) {
   url.searchParams.set('observation_start', startDate);
   url.searchParams.set('observation_end', endDate);
   url.searchParams.set('frequency', 'm');
+  url.searchParams.set('aggregation_method', 'avg'); // average weekly → monthly
   url.searchParams.set('file_type', 'json');
   url.searchParams.set('api_key', FRED_API_KEY);
 
